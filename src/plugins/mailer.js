@@ -145,7 +145,7 @@ export default fp(async function mailerPlugin(fastify) {
   }
 
   fastify.decorate('sendBookingTicket', async function sendBookingTicket(email, ticket) {
-    const brandName = 'Tours Meriyo Dublín'
+    const brandName = 'Meriyo Tours Dublín'
     const {
       bookingId, status, customerName, tourName,
       tourDate, departureTime, quantity, numberOfChildren, numberOfBabies, numberOfPets,
@@ -172,6 +172,13 @@ export default fp(async function mailerPlugin(fastify) {
       buildManageQrCode(manageUrl)
     ])
 
+    // Quiet footnote on what a free tour actually is and how a tip can be
+    // given, if the customer wants to leave one. Deliberately understated
+    // in both the plain-text and HTML versions below — no heading, no
+    // exclamation marks, no styling that calls attention to it. It's meant
+    // to be found by whoever reads the ticket closely, not skimmed past.
+    const freeTourNote = 'Un free tour es una visita guiada sin precio fijo: al finalizar, cada persona aporta la propina que considere justa según lo que le haya aportado la experiencia. Si quieres dejar propina, puedes hacerlo en efectivo o mediante tarjeta, Revolut o Bizum.'
+
     const text = [
       `${brandName}`,
       '----------------------------------------',
@@ -187,6 +194,8 @@ export default fp(async function mailerPlugin(fastify) {
       'The meeting point is shown on the map in this email.',
       osmLink ? `View it on OpenStreetMap: ${osmLink}` : null,
       manageUrl ? `To view, edit or cancel your booking, visit: ${manageUrl}` : 'Contact us if you need to edit or cancel your booking.',
+      '',
+      freeTourNote,
       '----------------------------------------',
       `© ${new Date().getFullYear()} ${brandName}`
     ].filter(Boolean).join('\n')
@@ -305,6 +314,16 @@ export default fp(async function mailerPlugin(fastify) {
       'No olvides traer contigo lo necesario para la ruta (calzado cómodo, agua y ropa adecuada para la meteorología prevista).'
     )
 
+    // Quiet footnote, HTML version: no box, no border, no accent color —
+    // small italic text at low opacity so it sits into the parchment
+    // background rather than calling attention to itself. Placed right
+    // before the footer band, after everything else has already been read.
+    const freeTourNoteHtml = `
+      <p style="margin: 22px 0 0 0; font-size: 10.5px; font-style: italic; line-height: 1.5; color: ${COLORS.ink}; opacity: 0.55;">
+        ${escape(freeTourNote)}
+      </p>
+    `
+
     // Row layout mirrors the PDF's details card: label left, bold value
     // right, thin divider between rows.
     const detailRow = (label, value, isLast) => `
@@ -333,7 +352,7 @@ export default fp(async function mailerPlugin(fastify) {
             <td style="background-color: ${COLORS.forestDeep}; padding: 26px 24px 22px 24px; text-align: left;">
               <img src="cid:brandlogo" width="40" height="40" alt="${brandName}" style="display:block; margin-bottom: 14px;" />
               <p style="margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; color: ${COLORS.gold}; text-transform: uppercase;">
-                Tours Meriyo Dublín
+                Meriyo Tours Dublín
               </p>
               <p style="margin: 3px 0 10px 0; font-size: 9px; letter-spacing: 0.6px; color: ${COLORS.goldSoft}; text-transform: uppercase;">
                 Excursión gratuita
@@ -389,13 +408,15 @@ export default fp(async function mailerPlugin(fastify) {
               ${buttonHtml}
               ${status !== 'cancelled' ? cancelButtonHtml : canceledButtonHtml}
               ${qrHtml}
+
+              ${freeTourNoteHtml}
             </td>
           </tr>
           <!-- Footer band, matches the PDF's dark-green footer -->
           <tr>
             <td style="background-color: ${COLORS.forestDeep}; padding: 18px 24px; text-align: left;">
               <p style="margin: 0; font-size: 12px; font-style: italic; font-weight: 700; color: ${COLORS.cream};">
-                Tours Meriyo Dublín
+                Meriyo Tours Dublín
               </p>
               <p style="margin: 4px 0 0 0; font-size: 10px; color: ${COLORS.goldSoft};">
                 &copy; ${new Date().getFullYear()} ${brandName}. Todos los derechos reservados.
