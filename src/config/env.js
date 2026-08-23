@@ -68,5 +68,17 @@ export const config = {
   //   MANAGE_BOOKING_URL=https://example.com/my-booking
   //   -> https://example.com/my-booking/<bookingId>
   // If unset, the mailer skips the QR code and manage link.
-  manageBookingUrl: optional('MANAGE_BOOKING_URL')
+  manageBookingUrl: optional('MANAGE_BOOKING_URL'),
+
+  // Daily reservations summary email — sent every midnight (server-side
+  // cron, see plugins/scheduler.js) with the same "current day + N days
+  // ahead" filter as the admin Reservas panel's default view. If
+  // SUMMARY_EMAIL is unset, the job is disabled (logged once at startup).
+  summaryEmail: optional('SUMMARY_EMAIL'),
+  // IANA timezone the "midnight" trigger and the "today" date are
+  // computed in — should match where the tours actually run, not
+  // necessarily where the server is hosted.
+  summaryEmailTimezone: optional('SUMMARY_EMAIL_TZ', 'Europe/Dublin'),
+  // How many days ahead of today the summary covers.
+  summaryEmailRangeDays: Number(optional('SUMMARY_EMAIL_RANGE_DAYS', 30)),
 }

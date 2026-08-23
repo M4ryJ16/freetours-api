@@ -144,6 +144,156 @@ export default fp(async function mailerPlugin(fastify) {
     }
   }
 
+  // Daily operational summary — how many reservations, and their party
+  // composition, are on the books for each upcoming (tour, date, time)
+  // slot. Distinct from sendBookingTicket: this isn't a customer-facing
+  // ticket, just a plain internal digest sent to SUMMARY_EMAIL. Reuses
+  // the same brand colors so it's visually recognizable as one of ours,
+  // but with none of the customer-ticket furniture (map, QR, notices).
+  fastify.decorate('sendReservationsSummaryEmail', async function sendReservationsSummaryEmail(email, { dateFrom, dateTo, rows }) {
+    const brandName = 'Meriyo Tours Dublín'
+    const subject = rows.length
+      ? `Resumen de reservas: ${dateFrom} a ${dateTo} (${rows.length} salida${rows.length === 1 ? '' : 's'})`
+      : `Resumen de reservas: ${dateFrom} a ${dateTo} (sin reservas)`
+
+    const totals = rows.reduce((acc, r) => {
+      acc.bookings += r.booking_count
+      acc.adults += r.adults
+      acc.children += r.children
+      acc.babies += r.babies
+      acc.pets += r.pets
+      return acc
+    }, { bookings: 0, adults: 0, children: 0, babies: 0, pets: 0 })
+
+    const formatDate = (value) => {
+      let datePart
+      if (value instanceof Date) {
+        // pg returns DATE columns as JS Date objects (in local/UTC midnight) —
+        // use the UTC getters to avoid a timezone shift landing on the wrong day.
+        const y = value.getUTCFullYear()
+        const m = String(value.getUTCMonth() + 1).padStart(2, '0')
+        const d = String(value.getUTCDate()).padStart(2, '0')
+        datePart = `${y}-${m}-${d}`
+      } else {
+        datePart = String(value).includes('T') ? String(value).split('T')[0] : String(value)
+      }
+      return new Date(`${datePart}T00:00:00`).toLocaleDateString('es-ES', {
+        weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+      })
+    }
+    const formatTime = (value) => String(value).slice(0, 5)
+
+    const textRows = rows.map((r) =>
+      `${formatDate(r.date)} ${formatTime(r.time)} — ${r.tour_name}: ${r.booking_count} reserva(s) — ` +
+      `${r.adults} adultos, ${r.children} niños, ${r.babies} bebés, ${r.pets} mascotas`
+    )
+
+    const text = [
+      brandName,
+      '----------------------------------------',
+      `Resumen de reservas: ${dateFrom} a ${dateTo}`,
+      '',
+      ...(textRows.length ? textRows : ['No hay reservas en este periodo.']),
+      '',
+      `Totales — reservas: ${totals.bookings}, adultos: ${totals.adults}, niños: ${totals.children}, bebés: ${totals.babies}, mascotas: ${totals.pets}`,
+      '----------------------------------------',
+      `© ${new Date().getFullYear()} ${brandName}`
+    ].join('\n')
+
+    const th = (label, align = 'left') => `
+      <th style="padding:10px 12px; text-align:${align}; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; color:${COLORS.ink}; opacity:0.7; border-bottom:2px solid ${COLORS.line};">${label}</th>
+    `
+    const td = (value, align = 'left', strong = false) => `
+      <td style="padding:10px 12px; text-align:${align}; font-size:13px; ${strong ? 'font-weight:700;' : ''} color:${COLORS.ink}; border-bottom:1px solid ${COLORS.line};">${value}</td>
+    `
+
+    const rowHtml = (r) => `
+      <tr>
+        ${td(escape(formatDate(r.date)))}
+        ${td(escape(formatTime(r.time)))}
+        ${td(escape(r.tour_name))}
+        ${td(r.booking_count, 'right')}
+        ${td(r.adults, 'right')}
+        ${td(r.children, 'right')}
+        ${td(r.babies, 'right')}
+        ${td(r.pets, 'right')}
+        ${td(r.adults + r.children + r.babies + r.pets, 'right', true)}
+      </tr>
+    `
+
+    const tableHtml = rows.length
+      ? `
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:${COLORS.cream}; border:1px solid ${COLORS.line}; border-collapse:collapse;">
+          <thead>
+          <tr>
+            ${th('Fecha')}${th('Hora')}${th('Ruta')}${th('Reservas', 'right')}${th('Adultos', 'right')}${th('Niños', 'right')}${th('Bebés', 'right')}${th('Mascotas', 'right')}${th('Total', 'right')}
+          </tr>
+          </thead>
+          <tbody>${rows.map(rowHtml).join('')}</tbody>
+          <tfoot>
+            <tr style="background-color:${COLORS.parchmentAlt};">
+              <td colspan="3" style="padding:10px 12px; font-size:13px; font-weight:700; color:${COLORS.ink};">Totales</td>
+              <td style="padding:10px 12px; font-size:13px; font-weight:700; color:${COLORS.ink}; text-align:right;">${totals.bookings}</td>
+              <td style="padding:10px 12px; font-size:13px; font-weight:700; color:${COLORS.ink}; text-align:right;">${totals.adults}</td>
+              <td style="padding:10px 12px; font-size:13px; font-weight:700; color:${COLORS.ink}; text-align:right;">${totals.children}</td>
+              <td style="padding:10px 12px; font-size:13px; font-weight:700; color:${COLORS.ink}; text-align:right;">${totals.babies}</td>
+              <td style="padding:10px 12px; font-size:13px; font-weight:700; color:${COLORS.ink}; text-align:right;">${totals.pets}</td>
+              <td style="padding:10px 12px; font-size:13px; font-weight:700; color:${COLORS.ink}; text-align:right;">${totals.adults + totals.children + totals.babies + totals.pets}</td>
+            </tr>
+          </tfoot>
+        </table>
+      `
+      : `<p style="margin:0; font-size:13px; color:${COLORS.ink};">No hay reservas en este periodo.</p>`
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+      </head>
+      <body style="margin:0; padding:0; background-color:${COLORS.parchment}; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:720px; margin:0 auto; background-color:${COLORS.parchment};">
+          <tr>
+            <td style="background-color:${COLORS.forestDeep}; padding:24px 24px 20px 24px;">
+              <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.8px; color:${COLORS.gold}; text-transform:uppercase;">Meriyo Tours Dublín</p>
+              <h1 style="margin:6px 0 0 0; font-size:20px; font-style:italic; font-weight:700; color:${COLORS.cream};">Resumen de reservas</h1>
+              <p style="margin:6px 0 0 0; font-size:12px; color:${COLORS.goldSoft};">${escape(dateFrom)} a ${escape(dateTo)}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:22px 24px; color:${COLORS.ink};">
+              ${tableHtml}
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:${COLORS.forestDeep}; padding:16px 24px;">
+              <p style="margin:0; font-size:10px; color:${COLORS.goldSoft};">© ${new Date().getFullYear()} ${brandName}. Envío automático diario.</p>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `
+
+    if (!transport) {
+      fastify.log.warn(
+        { email, dateFrom, dateTo, rowCount: rows.length },
+        'DEV MODE: reservations summary (not emailed, SMTP not configured)'
+      )
+      return { delivered: false }
+    }
+
+    try {
+      await transport.sendMail({ from: config.smtpFrom, to: email, subject, text, html })
+      return { delivered: true }
+    } catch (err) {
+      fastify.log.error({ err, email }, 'Failed to send reservations summary email')
+      return { delivered: false, error: err.message }
+    }
+  })
+
   fastify.decorate('sendBookingTicket', async function sendBookingTicket(email, ticket) {
     const brandName = 'Meriyo Tours Dublín'
     const {

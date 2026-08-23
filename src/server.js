@@ -19,6 +19,7 @@ import customerRoutes from './routes/customers.js'
 import bookingRoutes from './routes/bookings.js'
 import reviewRoutes from './routes/reviews.js'
 import authRoutes from './routes/auth.js'
+import schedulerPlugin from './plugins/scheduler.js'
 
 const fastify = Fastify({ logger: true })
 
@@ -29,6 +30,7 @@ await fastify.register(helmet, {
 await fastify.register(dbPlugin)
 await fastify.register(jwtPlugin)
 await fastify.register(mailerPlugin)
+await fastify.register(schedulerPlugin)
 await fastify.register(multipart, {
   limits: {
     fileSize: config.maxUploadBytes,

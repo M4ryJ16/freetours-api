@@ -1,3 +1,6 @@
+import { getReservationsSummary } from '#services/reservationsSummary.js'
+import { runDailyReservationsSummary } from '#services/dailySummaryJob.js'
+
 // Loads the fields needed to (re)send a booking's ticket email: tour
 // name, meeting-point coordinates (used to render the map image — see
 // plugins/mailer.js), the booked calendar date, departure time, and the
@@ -180,6 +183,56 @@ export default async function bookingRoutes(fastify) {
     } finally {
       client.release()
     }
+  })
+
+  // Manual trigger for the daily reservations summary email — same job
+  // the midnight cron runs (plugins/scheduler.js), exposed so an admin can
+  // send it on demand (e.g. to check it arrived, or to get an extra copy
+  // mid-day) without waiting for the schedule.
+  fastify.post('/bookings/summary/send', { preHandler: fastify.requirePublishKey }, async (request, reply) => {
+    try {
+      const result = await runDailyReservationsSummary(fastify)
+      if (!result.delivered) {
+        return reply.code(502).send({
+          error: 'Bad Gateway',
+          message: result.error || 'The summary was generated but the email could not be delivered.',
+          ...result
+        })
+      }
+      return result
+    } catch (err) {
+      if (err.message === 'SUMMARY_EMAIL is not configured.') {
+        return reply.code(400).send({ error: 'Bad Request', message: err.message })
+      }
+      throw err
+    }
+  })
+
+  // ----------------------------------------------------------------------
+  // Admin: aggregated reservation counts per tour + calendar date +
+  // departure time. Powers the admin "Reservas" panel — one row per
+  // (tour, date, time) with how many bookings, and the summed party
+  // composition (adults/children/babies/pets) across them.
+  // Cancelled bookings are excluded by default (pass includeCancelled=true
+  // to include them).
+  // ----------------------------------------------------------------------
+  fastify.get('/bookings/summary', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          tourId: { type: 'string', format: 'uuid' },
+          dateFrom: { type: 'string', format: 'date' },
+          dateTo: { type: 'string', format: 'date' },
+          timeFrom: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$' },
+          timeTo: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$' },
+          includeCancelled: { type: 'boolean' }
+        },
+        additionalProperties: false
+      }
+    }
+  }, async (request) => {
+    return getReservationsSummary(pg, request.query)
   })
 
   fastify.get('/bookings/:id', async (request, reply) => {
