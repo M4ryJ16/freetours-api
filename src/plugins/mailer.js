@@ -306,6 +306,10 @@ export default fp(async function mailerPlugin(fastify) {
       'Esta reserva está condicionada y puede sufrir variaciones o cancelaciones si no se cumple el mínimo de personas. Te lo notificaremos por WhatsApp o email. Gracias por tu comprensión. El guía se reserva el derecho de admisión.'
     )
 
+    const healthInsuranceNoticeHtml = warningBox(
+      'El seguro del tour solo cubre incidentes ocurridos directamente durante el trayecto. No cubre malestares gástricos por alimentos/bebidas (ya que no los proporcionamos) ni incidentes por descuido personal. Las mascotas son bienvenidas reservando su lugar, pero no tienen cobertura de seguro y cualquier gasto o imprevisto corre totalmente por cuenta de sus dueños.'
+    )
+
     const arriveEarlyNoticeHtml = warningBox(
       'Llega al punto de encuentro con 15 minutos de antelación. La salida es puntual y no podremos esperar a quien llegue tarde.'
     )
@@ -404,6 +408,7 @@ export default fp(async function mailerPlugin(fastify) {
               ${conditionalBookingNoticeHtml}
               ${arriveEarlyNoticeHtml}
               ${bringItemsNoticeHtml}
+              ${healthInsuranceNoticeHtml}
 
               ${buttonHtml}
               ${status !== 'cancelled' ? cancelButtonHtml : canceledButtonHtml}
