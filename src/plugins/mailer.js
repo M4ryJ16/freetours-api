@@ -470,6 +470,10 @@ export default fp(async function mailerPlugin(fastify) {
       'No olvides traer contigo lo necesario para la ruta (calzado cómodo, agua y ropa adecuada para la meteorología prevista).'
     )
 
+    const legalNoticeHtml = warningBox(
+      'Seguridad y responsabilidad en el tour: Guío los paseos con total tranquilidad porque cuento con un seguro de responsabilidad civil profesional. No obstante, ten en cuenta que cada participante se une a la caminata bajo su propia responsabilidad en lo referente a su estado físico, salud y pertenencias personales. Te recomiendo venir con calzado cómodo apto para los adoquines de Dublín y avisarme si tienes alguna molestia antes de empezar. El seguro cubre la actividad profesional del guía, pero no lesiones previas, dolencias de casa ni despistes con tus objetos personales. ¡Prevenir es curar!'
+    )
+
     // Quiet footnote, HTML version: no box, no border, no accent color —
     // small italic text at low opacity so it sits into the parchment
     // background rather than calling attention to itself. Placed right
@@ -567,6 +571,8 @@ export default fp(async function mailerPlugin(fastify) {
               ${qrHtml}
 
               ${freeTourNoteHtml}
+
+              ${legalNoticeHtml}
             </td>
           </tr>
           <!-- Footer band, matches the PDF's dark-green footer -->
