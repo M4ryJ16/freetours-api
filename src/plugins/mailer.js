@@ -184,8 +184,9 @@ export default fp(async function mailerPlugin(fastify) {
     const formatTime = (value) => String(value).slice(0, 5)
 
     const textRows = rows.map((r) =>
-      `${formatDate(r.date)} ${formatTime(r.time)} — ${r.tour_name}: ${r.booking_count} reserva(s) — ` +
-      `${r.adults} adultos, ${r.children} niños, ${r.babies} bebés, ${r.pets} mascotas`
+      `${formatDate(r.date)} ${formatTime(r.time)} — ${r.tour_name} — ${r.customer_names}: ${r.booking_count} reserva(s) — ` +
+      `${r.adults} adultos, ${r.children} niños, ${r.babies} bebés, ${r.pets} mascotas ` +
+      `(total: ${r.adults + r.children + r.babies + r.pets})`
     )
 
     const text = [
@@ -212,6 +213,7 @@ export default fp(async function mailerPlugin(fastify) {
         ${td(escape(formatDate(r.date)))}
         ${td(escape(formatTime(r.time)))}
         ${td(escape(r.tour_name))}
+        ${td(escape(r.customer_names || ''))}
         ${td(r.booking_count, 'right')}
         ${td(r.adults, 'right')}
         ${td(r.children, 'right')}
@@ -225,14 +227,14 @@ export default fp(async function mailerPlugin(fastify) {
       ? `
         <table width="100%" cellpadding="0" cellspacing="0" style="background-color:${COLORS.cream}; border:1px solid ${COLORS.line}; border-collapse:collapse;">
           <thead>
-          <tr>
-            ${th('Fecha')}${th('Hora')}${th('Ruta')}${th('Reservas', 'right')}${th('Adultos', 'right')}${th('Niños', 'right')}${th('Bebés', 'right')}${th('Mascotas', 'right')}${th('Total', 'right')}
-          </tr>
+            <tr>
+              ${th('Fecha')}${th('Hora')}${th('Ruta')}${th('Nombre')}${th('Reservas', 'right')}${th('Adultos', 'right')}${th('Niños', 'right')}${th('Bebés', 'right')}${th('Mascotas', 'right')}${th('Total', 'right')}
+            </tr>
           </thead>
           <tbody>${rows.map(rowHtml).join('')}</tbody>
           <tfoot>
             <tr style="background-color:${COLORS.parchmentAlt};">
-              <td colspan="3" style="padding:10px 12px; font-size:13px; font-weight:700; color:${COLORS.ink};">Totales</td>
+              <td colspan="4" style="padding:10px 12px; font-size:13px; font-weight:700; color:${COLORS.ink};">Totales</td>
               <td style="padding:10px 12px; font-size:13px; font-weight:700; color:${COLORS.ink}; text-align:right;">${totals.bookings}</td>
               <td style="padding:10px 12px; font-size:13px; font-weight:700; color:${COLORS.ink}; text-align:right;">${totals.adults}</td>
               <td style="padding:10px 12px; font-size:13px; font-weight:700; color:${COLORS.ink}; text-align:right;">${totals.children}</td>

@@ -25,11 +25,13 @@ export async function getReservationsSummary(pg, filters = {}) {
             COALESCE(SUM(b.quantity), 0)::int AS adults,
             COALESCE(SUM(b.number_of_children), 0)::int AS children,
             COALESCE(SUM(b.number_of_babies), 0)::int AS babies,
-            COALESCE(SUM(b.number_of_pets), 0)::int AS pets
+            COALESCE(SUM(b.number_of_pets), 0)::int AS pets,
+            STRING_AGG(c.full_name, ', ' ORDER BY c.full_name) AS customer_names
      FROM bookings b
      JOIN tours t ON t.id = b.tour_id
      JOIN tour_dates td ON td.id = b.tour_date_id
      JOIN tour_schedules ts ON ts.id = b.tour_schedule_id
+     JOIN customers c ON c.id = b.customer_id
      ${where}
      GROUP BY t.id, t.name, td.id, td.date, ts.id, ts.time
      ORDER BY td.date ASC, ts.time ASC, t.name ASC`,
