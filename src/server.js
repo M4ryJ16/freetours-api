@@ -13,6 +13,7 @@ import healthRoutes from './routes/health.js'
 import tourRoutes from './routes/tours.js'
 import tourScheduleRoutes from './routes/tourSchedules.js'
 import tourDateRoutes from './routes/tourDates.js'
+import tourStopRoutes from './routes/tourStops.js'
 import galleryRoutes from './routes/gallery.js'
 import imageRoutes from './routes/images.js'
 import customerRoutes from './routes/customers.js'
@@ -51,6 +52,7 @@ await fastify.register(async (app) => {
   await app.register(tourRoutes, { prefix: '/tours' })
   await app.register(tourScheduleRoutes, { prefix: '/tours' })
   await app.register(tourDateRoutes, { prefix: '/tours' })
+  await app.register(tourStopRoutes, { prefix: '/tours' })
   await app.register(galleryRoutes, { prefix: '/tours' })
   await app.register(imageRoutes, { prefix: '/images' })
   await app.register(customerRoutes, { prefix: '/customers' })

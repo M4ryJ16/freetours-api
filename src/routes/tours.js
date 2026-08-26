@@ -5,6 +5,9 @@
 // address can be turned into lat/lng for free via OSM's Nominatim
 // geocoder (https://nominatim.openstreetmap.org) on the admin/frontend
 // side before calling this API.
+//
+// Beyond this single required meeting point, a tour can also have any
+// number of ordered route stops — see routes/tourStops.js.
 const meetingPointSchema = {
   type: 'object',
   required: ['lat', 'lng'],
@@ -17,6 +20,11 @@ const meetingPointSchema = {
   additionalProperties: false
 }
 
+// durationHours accepts fractional values (e.g. 2.5 for a two-and-a-half
+// hour tour), not just whole hours — matches tours.duration_hours being
+// DOUBLE PRECISION rather than an integer column.
+const durationHoursSchema = { type: 'number', exclusiveMinimum: 0 }
+
 const tourCreateSchema = {
   body: {
     type: 'object',
@@ -26,7 +34,7 @@ const tourCreateSchema = {
       description: { type: 'string', minLength: 1 },
       image: { type: 'string', format: 'uuid' },
       meetingPoint: meetingPointSchema,
-      durationHours: { type: 'integer', minimum: 1 },
+      durationHours: durationHoursSchema,
       capacity: { type: 'integer', minimum: 1 },
       isActive: { type: 'boolean' }
     },
@@ -43,7 +51,7 @@ const tourUpdateSchema = {
       description: { type: 'string', minLength: 1 },
       image: { type: ['string', 'null'], format: 'uuid' },
       meetingPoint: meetingPointSchema,
-      durationHours: { type: 'integer', minimum: 1 },
+      durationHours: durationHoursSchema,
       capacity: { type: 'integer', minimum: 1 },
       isActive: { type: 'boolean' }
     },
@@ -77,13 +85,24 @@ export default async function tourRoutes(fastify) {
     return rows
   })
 
+  // Includes both the gallery (photos) and the tour's ordered route stops
+  // (tour_stops), distinct from the tour's single required meeting point
+  // which stays as flat meeting_point* columns on the tour row itself.
   fastify.get('/:id', async (request, reply) => {
     const { id } = request.params
     const { rows } = await pg.query(
       `SELECT t.*,
-              COALESCE(json_agg(jsonb_build_object(
+              COALESCE(json_agg(DISTINCT jsonb_build_object(
                 'id', i.id, 'url', i.url, 'alt', i.alt, 'position', g.position
-              ) ORDER BY g.position ASC) FILTER (WHERE i.id IS NOT NULL), '[]') AS gallery
+              )) FILTER (WHERE i.id IS NOT NULL), '[]') AS gallery,
+              COALESCE((
+                SELECT json_agg(jsonb_build_object(
+                  'id', s.id, 'name', s.name, 'description', s.description,
+                  'lat', s.lat, 'lng', s.lng, 'osmId', s.osm_id, 'position', s.position
+                ) ORDER BY s.position ASC)
+                FROM tour_stops s
+                WHERE s.tour_id = t.id
+              ), '[]') AS stops
       FROM tours t
       LEFT JOIN gallery g ON g.tour_id = t.id
       LEFT JOIN images i ON i.id = g.image_id

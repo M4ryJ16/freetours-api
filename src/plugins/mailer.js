@@ -455,7 +455,7 @@ export default fp(async function mailerPlugin(fastify) {
     `
 
     const conditionalBookingNoticeHtml = warningBox(
-      'Esta reserva está condicionada y puede sufrir variaciones o cancelaciones si no se cumple el mínimo de personas. Te lo notificaremos por WhatsApp o email. Gracias por tu comprensión. El guía se reserva el derecho de admisión.'
+      'Esta reserva está condicionada y puede sufrir variaciones o cancelaciones si no se cumple el mínimo de 4 personas. Te lo notificaremos por WhatsApp o email. Gracias por tu comprensión. El guía se reserva el derecho de admisión.'
     )
 
     const healthInsuranceNoticeHtml = warningBox(
