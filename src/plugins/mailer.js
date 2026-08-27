@@ -349,6 +349,7 @@ export default fp(async function mailerPlugin(fastify) {
       '',
       freeTourNote,
       '----------------------------------------',
+      'Privacy policy: https://www.meriyotoursdublin.com/politicas-privacidad',
       `© ${new Date().getFullYear()} ${brandName}`
     ].filter(Boolean).join('\n')
 
@@ -583,6 +584,8 @@ export default fp(async function mailerPlugin(fastify) {
               </p>
               <p style="margin: 4px 0 0 0; font-size: 10px; color: ${COLORS.goldSoft};">
                 &copy; ${new Date().getFullYear()} ${brandName}. Todos los derechos reservados.
+                &nbsp;&middot;&nbsp;
+                <a href="https://www.meriyotoursdublin.com/politicas-privacidad" style="color: ${COLORS.goldSoft};">Política de privacidad</a>
               </p>
             </td>
           </tr>
