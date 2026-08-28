@@ -255,14 +255,14 @@ export default async function bookingRoutes(fastify) {
 
   // ----------------------------------------------------------------------
   // Customer self-service: edit a booking's date/schedule/party size.
-  // Requires a valid customer session (Bearer token) matching the
-  // booking's owner. Re-runs the same row-locked capacity check as
-  // POST /bookings, excluding this booking's own currently-held spots so
-  // editing quantity down (or keeping the same date/schedule) doesn't get
+  // No login required — anyone with the booking id (from the ticket
+  // email / manage link) can edit it, same model as GET /bookings/:id
+  // below. Re-runs the same row-locked capacity check as POST /bookings,
+  // excluding this booking's own currently-held spots so editing
+  // quantity down (or keeping the same date/schedule) doesn't get
   // wrongly blocked by itself.
   // ----------------------------------------------------------------------
   fastify.patch('/bookings/:id', {
-    preHandler: fastify.authenticateCustomer,
     schema: {
       body: {
         type: 'object',
@@ -290,10 +290,6 @@ export default async function bookingRoutes(fastify) {
       }
       const booking = existing.rows[0]
 
-      if (booking.customer_id !== request.user.sub) {
-        await client.query('ROLLBACK')
-        return reply.code(403).send({ error: 'Forbidden', message: 'You do not have access to this booking.' })
-      }
       if (['cancelled', 'completed'].includes(booking.status)) {
         await client.query('ROLLBACK')
         return reply.code(409).send({
@@ -399,12 +395,12 @@ export default async function bookingRoutes(fastify) {
   })
 
   // ----------------------------------------------------------------------
-  // Customer self-service: cancel a booking. Requires a valid customer
-  // session matching the booking's owner. Soft-cancel only (status flip),
-  // same as the admin status endpoint below, so booking/review history
-  // stays intact.
+  // Customer self-service: cancel a booking. No login required — same
+  // "anyone with the booking id" model as the PATCH above. Soft-cancel
+  // only (status flip), same as the admin status endpoint below, so
+  // booking/review history stays intact.
   // ----------------------------------------------------------------------
-  fastify.delete('/bookings/:id', { preHandler: fastify.authenticateCustomer }, async (request, reply) => {
+  fastify.delete('/bookings/:id', async (request, reply) => {
     const { id } = request.params
 
     const existing = await pg.query('SELECT * FROM bookings WHERE id = $1', [id])
@@ -413,9 +409,6 @@ export default async function bookingRoutes(fastify) {
     }
     const booking = existing.rows[0]
 
-    if (booking.customer_id !== request.user.sub) {
-      return reply.code(403).send({ error: 'Forbidden', message: 'You do not have access to this booking.' })
-    }
     if (booking.status === 'cancelled') {
       return reply.code(409).send({ error: 'Conflict', message: 'This booking is already cancelled.' })
     }
