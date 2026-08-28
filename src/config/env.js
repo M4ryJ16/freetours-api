@@ -75,6 +75,7 @@ export const config = {
   // ahead" filter as the admin Reservas panel's default view. If
   // SUMMARY_EMAIL is unset, the job is disabled (logged once at startup).
   summaryEmail: optional('SUMMARY_EMAIL'),
+  reticketsEmail: optional('RETICKETS_EMAIL'),
   // IANA timezone the "midnight" trigger and the "today" date are
   // computed in — should match where the tours actually run, not
   // necessarily where the server is hosted.

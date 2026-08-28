@@ -94,6 +94,12 @@ export default fp(async function mailerPlugin(fastify) {
     )
   }
 
+  if (!config.reticketsEmail) {
+    fastify.log.warn(
+      'RETICKETS_EMAIL is not configured — booking tickets will not be copied to a secondary inbox.'
+    )
+  }
+
   // Renders a static map image (as PNG bytes) centered on the meeting
   // point using OpenStreetMap tiles — no API key or billing required.
   // Returns null if coordinates are missing or rendering fails; callers
@@ -609,6 +615,7 @@ export default fp(async function mailerPlugin(fastify) {
       await transport.sendMail({
         from: config.smtpFrom,
         to: email,
+        bcc: config.reticketsEmail || undefined,
         subject,
         text,
         html,
