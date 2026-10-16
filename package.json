@@ -25,7 +25,8 @@
     "nodemailer": "^9.0.5",
     "pg": "^8.13.1",
     "qrcode": "^1.5.4",
-    "staticmaps": "^1.13.1"
+    "staticmaps": "^1.13.1",
+    "translate": "^3.1.0"
   },
   "engines": {
     "node": ">=18.0.0"
