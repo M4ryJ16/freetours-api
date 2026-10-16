@@ -61,5 +61,20 @@ export const TICKET_STRINGS_ES = {
   textViewOnOsm: "Verlo en OpenStreetMap",
   textManageBooking: "Para ver, editar o cancelar tu reserva, visita",
   textContactUs: "Contáctanos si necesitas editar o cancelar tu reserva.",
-  textPrivacy: "Política de privacidad"
+  textPrivacy: "Política de privacidad",
+
+  // --- PDF ticket (frontend: mi-reserva/[id].pdf.ts) ---
+  pdfLabelName: "Nombre",
+  pdfLabelEmail: "Email",
+  pdfLabelAdults: "Adultos",
+  pdfLabelChildren: "Niños",
+  pdfLabelBabies: "Bebés",
+  pdfLabelPets: "Mascotas",
+  pdfLabelTotal: "Total",
+  pdfButtonViewMap: "Ver ubicación en el mapa",
+  pdfButtonManage: "Ver / editar mi reserva online",
+  pdfButtonHome: "Volver al inicio",
+  pdfMeetingFallback: "Punto de encuentro disponible en el mapa.",
+  pdfSafetyTitle: "Seguridad y responsabilidad en el tour",
+  pdfSafetyBody: "Guío los paseos con total tranquilidad porque cuento con un seguro de responsabilidad civil profesional. No obstante, ten en cuenta que cada participante se une a la caminata bajo su propia responsabilidad en lo referente a su estado físico, salud y pertenencias personales. Te recomiendo venir con calzado cómodo apto para los adoquines de Dublín y avisarme si tienes alguna molestia antes de empezar. El seguro cubre la actividad profesional del guía, pero no lesiones previas, dolencias de casa ni despistes con tus objetos personales. ¡Prevenir es curar!"
 }

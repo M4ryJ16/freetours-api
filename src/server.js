@@ -20,6 +20,7 @@ import customerRoutes from './routes/customers.js'
 import bookingRoutes from './routes/bookings.js'
 import reviewRoutes from './routes/reviews.js'
 import authRoutes from './routes/auth.js'
+import i18nRoutes from './routes/i18n.js'
 import schedulerPlugin from './plugins/scheduler.js'
 
 const fastify = Fastify({ logger: true })
@@ -59,6 +60,7 @@ await fastify.register(async (app) => {
   await app.register(bookingRoutes)
   await app.register(reviewRoutes)
   await app.register(authRoutes)
+  await app.register(i18nRoutes)
 })
 
 fastify.setErrorHandler((error, request, reply) => {
