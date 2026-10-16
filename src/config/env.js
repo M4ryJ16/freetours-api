@@ -84,6 +84,14 @@ export const config = {
   osmTileUrl: optional('OSM_TILE_URL', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
   osmTileUserAgent: optional('OSM_TILE_USER_AGENT', 'tours-meriyo-dublin/1.0 (contact: no-reply@example.com)'),
 
+  // Ticket translation (see services/translator.js). Tickets are written in
+  // Spanish and translated on demand when a request passes ?lang=<code>.
+  // TRANSLATE_ENGINE is any engine supported by the "translate" package
+  // (google — the default, needs no key —, libre, deepl, yandex).
+  // TRANSLATE_KEY is only required by engines that need an API key.
+  translateEngine: optional('TRANSLATE_ENGINE', 'google'),
+  translateKey: optional('TRANSLATE_KEY'),
+
   // The full URL of the page (frontend) where a customer can view, edit,
   // or cancel their own booking. The booking id is appended to the end
   // of this URL to build both the QR code and the plain-text fallback

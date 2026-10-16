@@ -4,6 +4,7 @@ import QRCode from 'qrcode'
 import StaticMaps from 'staticmaps'
 import { config } from '#config/env.js'
 import { escape } from 'html-escaper'
+import { getTicketStrings, normalizeLang, DEFAULT_LANG } from '#services/translator.js'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
@@ -33,7 +34,12 @@ const COLORS = {
 }
 
 /**
- * Decorates the Fastify instance with `fastify.sendBookingTicket(email, ticket)`.
+ * Decorates the Fastify instance with `fastify.sendBookingTicket(email, ticket, lang = 'es')`.
+ *
+ * `lang` selects the ticket language. Text is authored in Spanish
+ * (services/ticketStrings.js) and translated on demand for any other
+ * language (services/translator.js); if translation fails, the affected
+ * strings fall back to Spanish.
  *
  * If SMTP_HOST is configured, sends a real email via nodemailer with the
  * customer's tour-registration ticket. If it's not configured (e.g. local
@@ -315,8 +321,14 @@ export default fp(async function mailerPlugin(fastify) {
     }
   })
 
-  fastify.decorate('sendBookingTicket', async function sendBookingTicket(email, ticket) {
+  fastify.decorate('sendBookingTicket', async function sendBookingTicket(email, ticket, lang = DEFAULT_LANG) {
     const brandName = 'Meriyo Tours Dublín'
+    // All user-facing ticket text comes from this catalog, translated into
+    // `lang` (Spanish is the source language and is sent untouched).
+    // Translated text is HTML-escaped via `e()` before going into the HTML.
+    const t = await getTicketStrings(lang, fastify.log)
+    const e = (key) => escape(t[key])
+    const htmlLang = normalizeLang(lang)
     const {
       bookingId, status, customerName, tourName,
       tourDate, departureTime, quantity, numberOfChildren, numberOfBabies, numberOfPets,
@@ -324,13 +336,13 @@ export default fp(async function mailerPlugin(fastify) {
     } = ticket
 
     const partyLines = [
-      `${quantity} adult${quantity === 1 ? '' : 's'}`,
-      numberOfChildren ? `${numberOfChildren} child${numberOfChildren === 1 ? '' : 'ren'}` : null,
-      numberOfBabies ? `${numberOfBabies} bab${numberOfBabies === 1 ? 'y' : 'ies'}` : null,
-      numberOfPets ? `${numberOfPets} pet${numberOfPets === 1 ? '' : 's'}` : null
+      `${quantity} ${quantity === 1 ? t.adult : t.adults}`,
+      numberOfChildren ? `${numberOfChildren} ${numberOfChildren === 1 ? t.child : t.children}` : null,
+      numberOfBabies ? `${numberOfBabies} ${numberOfBabies === 1 ? t.baby : t.babies}` : null,
+      numberOfPets ? `${numberOfPets} ${numberOfPets === 1 ? t.pet : t.pets}` : null
     ].filter(Boolean).join(', ')
 
-    const subject = `Your free tour ticket: ${tourName}`
+    const subject = `${t.subjectPrefix} ${tourName}`
 
     const osmLink = (meetingPointLat != null && meetingPointLng != null)
       ? `https://www.openstreetmap.org/?mlat=${meetingPointLat}&mlon=${meetingPointLng}#map=17/${meetingPointLat}/${meetingPointLng}`
@@ -348,27 +360,27 @@ export default fp(async function mailerPlugin(fastify) {
     // in both the plain-text and HTML versions below — no heading, no
     // exclamation marks, no styling that calls attention to it. It's meant
     // to be found by whoever reads the ticket closely, not skimmed past.
-    const freeTourNote = 'Un free tour es una visita guiada sin precio fijo: al finalizar, cada persona aporta la propina que considere justa según lo que le haya aportado la experiencia. Si quieres dejar propina, puedes hacerlo en efectivo o mediante tarjeta, Revolut o Bizum.'
+    const freeTourNote = t.freeTourNote
 
     const text = [
       `${brandName}`,
       '----------------------------------------',
-      `Hi ${customerName},`,
+      `${t.textHello} ${customerName},`,
       '',
-      `Your spot on "${tourName}".`,
+      `${t.textYourSpot} "${tourName}".`,
       '',
-      `Date: ${tourDate}`,
-      `Departure time: ${departureTime}`,
-      `Party: ${partyLines}`,
-      `Booking reference: ${bookingId}`,
+      `${t.textDate}: ${tourDate}`,
+      `${t.textDepartureTime}: ${departureTime}`,
+      `${t.textParty}: ${partyLines}`,
+      `${t.textReference}: ${bookingId}`,
       '',
-      'The meeting point is shown on the map in this email.',
-      osmLink ? `View it on OpenStreetMap: ${osmLink}` : null,
-      manageUrl ? `To view, edit or cancel your booking, visit: ${manageUrl}` : 'Contact us if you need to edit or cancel your booking.',
+      t.textMeetingPointOnMap,
+      osmLink ? `${t.textViewOnOsm}: ${osmLink}` : null,
+      manageUrl ? `${t.textManageBooking}: ${manageUrl}` : t.textContactUs,
       '',
       freeTourNote,
       '----------------------------------------',
-      'Privacy policy: https://www.meriyotoursdublin.com/politicas-privacidad',
+      `${t.textPrivacy}: https://www.meriyotoursdublin.com/politicas-privacidad`,
       `© ${new Date().getFullYear()} ${brandName}`
     ].filter(Boolean).join('\n')
 
@@ -384,7 +396,7 @@ export default fp(async function mailerPlugin(fastify) {
 
     // Header title mirrors the PDF's "Reserva confirmada" heading, with a
     // cancelled variant to match the cancel/cancelled button state below.
-    const headerTitle = status === 'cancelled' ? 'Reserva cancelada' : 'Reserva confirmada'
+    const headerTitle = status === 'cancelled' ? e('headerCancelled') : e('headerConfirmed')
 
     // Map and QR are attached as cid images, same as the logo above —
     // cid attachments are the broadly compatible way for mail clients to
@@ -393,13 +405,13 @@ export default fp(async function mailerPlugin(fastify) {
     // OSM attribution, which the PDF doesn't have room for.
     const mapHtml = mapBuffer
       ? `
-        <img src="cid:meetingpointmap" alt="Punto de encuentro" width="600" height="300" style="display:block; width:100%; max-width:600px; height:auto; border-radius:8px; border:1px solid ${COLORS.line};" />
+        <img src="cid:meetingpointmap" alt="${e('mapAlt')}" width="600" height="300" style="display:block; width:100%; max-width:600px; height:auto; border-radius:8px; border:1px solid ${COLORS.line};" />
         <p style="margin: 8px 0 0 0; font-size: 11px; color: ${COLORS.ink}; opacity: 0.65;">
-          Datos del mapa &copy; <a href="https://www.openstreetmap.org/copyright" style="color: ${COLORS.ink};">OpenStreetMap</a> contributors
-          ${osmLink ? ` &mdash; <a href="${osmLink}" style="color: ${COLORS.russet};">abrir en OpenStreetMap</a>` : ''}
+          ${e('mapDataBy')} &copy; <a href="https://www.openstreetmap.org/copyright" style="color: ${COLORS.ink};">OpenStreetMap</a> contributors
+          ${osmLink ? ` &mdash; <a href="${osmLink}" style="color: ${COLORS.russet};">${e('mapOpenInOsm')}</a>` : ''}
         </p>
       `
-      : `<p style="margin: 0; font-size: 13px; color: ${COLORS.ink};">El mapa del punto de encuentro no está disponible.${osmLink ? ` <a href="${osmLink}" style="color:${COLORS.russet};">Ver en OpenStreetMap</a>.` : ' Por favor contáctanos para indicaciones.'}</p>`
+      : `<p style="margin: 0; font-size: 13px; color: ${COLORS.ink};">${e('mapUnavailable')}${osmLink ? ` <a href="${osmLink}" style="color:${COLORS.russet};">${e('mapViewInOsm')}</a>.` : ` ${e('mapContactUs')}`}</p>`
 
     const buttonHtml = manageUrl
       ? `
@@ -407,7 +419,7 @@ export default fp(async function mailerPlugin(fastify) {
           <tr>
             <td align="center">
               <a href="${manageUrl}" style="display:inline-block; background-color:${COLORS.orange}; color:${COLORS.cream}; font-size:14px; font-weight:700; text-decoration:none; padding:14px 36px; letter-spacing:0.3px;">
-                Ver mi reserva
+                ${e('buttonViewBooking')}
               </a>
             </td>
           </tr>
@@ -421,7 +433,7 @@ export default fp(async function mailerPlugin(fastify) {
           <tr>
             <td align="center">
               <a href="${manageUrl}?cancel=true" style="display:inline-block; background-color:${COLORS.forestDeep}; color:${COLORS.cream}; font-size:13px; font-weight:700; text-decoration:none; padding:13px 36px; letter-spacing:0.3px;">
-                Cancelar reserva
+                ${e('buttonCancelBooking')}
               </a>
             </td>
           </tr>
@@ -435,7 +447,7 @@ export default fp(async function mailerPlugin(fastify) {
           <tr>
             <td align="center">
               <a href="${manageUrl}" style="display:inline-block; background-color:transparent; color:${COLORS.russet}; font-size:13px; font-weight:700; text-decoration:none; padding:12px 34px; border:1.5px solid ${COLORS.russet}; letter-spacing:0.3px;">
-                Reserva cancelada
+                ${e('buttonBookingCancelled')}
               </a>
             </td>
           </tr>
@@ -448,9 +460,9 @@ export default fp(async function mailerPlugin(fastify) {
         <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 4px;">
           <tr>
             <td align="center">
-              <img src="cid:manageqrcode" alt="Código QR para gestionar tu reserva" width="120" height="120" style="background:#ffffff; padding:8px; border:1px solid ${COLORS.line};" />
+              <img src="cid:manageqrcode" alt="${e('qrAlt')}" width="120" height="120" style="background:#ffffff; padding:8px; border:1px solid ${COLORS.line};" />
               <p style="margin: 10px 0 0 0; font-size: 12px; color: ${COLORS.ink}; opacity: 0.65;">
-                Escanea para gestionar o cancelar tu reserva
+                ${e('qrCaption')}
               </p>
             </td>
           </tr>
@@ -474,25 +486,15 @@ export default fp(async function mailerPlugin(fastify) {
       </table>
     `
 
-    const conditionalBookingNoticeHtml = warningBox(
-      'Esta reserva está condicionada y puede sufrir variaciones o cancelaciones si no se cumple el mínimo de 4 personas. Te lo notificaremos por WhatsApp o email. Gracias por tu comprensión. El guía se reserva el derecho de admisión.'
-    )
+    const conditionalBookingNoticeHtml = warningBox(e('noticeConditional'))
 
-    const healthInsuranceNoticeHtml = warningBox(
-      'El seguro del tour solo cubre incidentes ocurridos directamente durante el trayecto. No cubre malestares gástricos por alimentos/bebidas (ya que no los proporcionamos) ni incidentes por descuido personal. Las mascotas son bienvenidas reservando su lugar, pero no tienen cobertura de seguro y cualquier gasto o imprevisto corre totalmente por cuenta de sus dueños.'
-    )
+    const healthInsuranceNoticeHtml = warningBox(e('noticeHealthInsurance'))
 
-    const arriveEarlyNoticeHtml = warningBox(
-      'Llega al punto de encuentro con 15 minutos de antelación. La salida es puntual y no podremos esperar a quien llegue tarde.'
-    )
+    const arriveEarlyNoticeHtml = warningBox(e('noticeArriveEarly'))
 
-    const bringItemsNoticeHtml = warningBox(
-      'No olvides traer contigo lo necesario para la ruta (calzado cómodo, agua y ropa adecuada para la meteorología prevista).'
-    )
+    const bringItemsNoticeHtml = warningBox(e('noticeBringItems'))
 
-    const legalNoticeHtml = warningBox(
-      'Seguridad y responsabilidad en el tour: Guío los paseos con total tranquilidad porque cuento con un seguro de responsabilidad civil profesional. No obstante, ten en cuenta que cada participante se une a la caminata bajo su propia responsabilidad en lo referente a su estado físico, salud y pertenencias personales. Te recomiendo venir con calzado cómodo apto para los adoquines de Dublín y avisarme si tienes alguna molestia antes de empezar. El seguro cubre la actividad profesional del guía, pero no lesiones previas, dolencias de casa ni despistes con tus objetos personales. ¡Prevenir es curar!'
-    )
+    const legalNoticeHtml = warningBox(e('noticeLegal'))
 
     // Quiet footnote, HTML version: no box, no border, no accent color —
     // small italic text at low opacity so it sits into the parchment
@@ -519,7 +521,7 @@ export default fp(async function mailerPlugin(fastify) {
 
     const html = `
       <!DOCTYPE html>
-      <html lang="es">
+      <html lang="${htmlLang}">
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -535,7 +537,7 @@ export default fp(async function mailerPlugin(fastify) {
                 Meriyo Tours Dublín
               </p>
               <p style="margin: 3px 0 10px 0; font-size: 9px; letter-spacing: 0.6px; color: ${COLORS.goldSoft}; text-transform: uppercase;">
-                Excursión gratuita
+                ${e('freeTourBadge')}
               </p>
               <h1 style="margin: 0; font-size: 22px; font-style: italic; font-weight: 700; color: ${COLORS.cream};">
                 ${headerTitle}
@@ -546,7 +548,7 @@ export default fp(async function mailerPlugin(fastify) {
           <tr>
             <td style="padding: 26px 24px; color: ${COLORS.ink};">
               <p style="margin: 0 0 20px 0; font-size: 13px; color: ${COLORS.ink}; opacity: 0.8;">
-                Hola ${safe.customerName}, esta es tu plaza en <strong>${safe.tourName}</strong>.
+                ${e('greetingHello')} ${safe.customerName}, ${e('greetingSpotOn')} <strong>${safe.tourName}</strong>.
               </p>
 
               <!-- Details card, cream bg with orange "RUTA" header, mirrors the PDF card -->
@@ -555,7 +557,7 @@ export default fp(async function mailerPlugin(fastify) {
                   <td style="background-color: ${COLORS.orange}; padding: 12px 16px;">
                     <table width="100%" cellpadding="0" cellspacing="0">
                       <tr>
-                        <td style="font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: ${COLORS.cream};">RUTA</td>
+                        <td style="font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: ${COLORS.cream};">${e('routeLabel')}</td>
                         <td style="font-size: 13px; font-weight: 700; color: ${COLORS.cream}; text-align: right;">${safe.tourName}</td>
                       </tr>
                     </table>
@@ -564,21 +566,21 @@ export default fp(async function mailerPlugin(fastify) {
                 <tr>
                   <td style="padding: 4px 16px 6px 16px;">
                     <table width="100%" cellpadding="0" cellspacing="0">
-                      ${detailRow('Fecha', safe.tourDate)}
-                      ${detailRow('Hora', safe.departureTime)}
-                      ${detailRow('Personas', safe.partyLines)}
-                      ${detailRow('Referencia', safe.bookingId)}
-                      ${detailRow('Precio final', '0.00€', true)}
+                      ${detailRow(e('labelDate'), safe.tourDate)}
+                      ${detailRow(e('labelTime'), safe.departureTime)}
+                      ${detailRow(e('labelParty'), safe.partyLines)}
+                      ${detailRow(e('labelReference'), safe.bookingId)}
+                      ${detailRow(e('labelFinalPrice'), '0.00€', true)}
                     </table>
                   </td>
                 </tr>
               </table>
 
-              <p style="margin: 24px 0 10px 0; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: ${COLORS.gold}; text-transform: uppercase;">Punto de encuentro</p>
+              <p style="margin: 24px 0 10px 0; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: ${COLORS.gold}; text-transform: uppercase;">${e('meetingPoint')}</p>
               ${mapHtml}
 
               <p style="margin: 20px 0 0 0; font-size: 11px; color: ${COLORS.ink}; opacity: 0.65; text-align:center;">
-                Esta excursión es gratuita — no se necesita pago ni ninguna otra acción. ¡Nos vemos allí!
+                ${e('freeTourReassurance')}
               </p>
 
               ${conditionalBookingNoticeHtml}
@@ -602,9 +604,9 @@ export default fp(async function mailerPlugin(fastify) {
                 Meriyo Tours Dublín
               </p>
               <p style="margin: 4px 0 0 0; font-size: 10px; color: ${COLORS.goldSoft};">
-                &copy; ${new Date().getFullYear()} ${brandName}. Todos los derechos reservados.
+                &copy; ${new Date().getFullYear()} ${brandName}. ${e('footerRights')}
                 &nbsp;&middot;&nbsp;
-                <a href="https://www.meriyotoursdublin.com/politicas-privacidad" style="color: ${COLORS.goldSoft};">Política de privacidad</a>
+                <a href="https://www.meriyotoursdublin.com/politicas-privacidad" style="color: ${COLORS.goldSoft};">${e('footerPrivacy')}</a>
               </p>
             </td>
           </tr>

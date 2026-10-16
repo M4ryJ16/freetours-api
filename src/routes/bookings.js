@@ -1,5 +1,17 @@
 import { getReservationsSummary } from '#services/reservationsSummary.js'
 import { runDailyReservationsSummary } from '#services/dailySummaryJob.js'
+import { DEFAULT_LANG } from '#services/translator.js'
+
+// Optional ?lang=<code> on every route that emails a ticket to the
+// customer. Defaults to Spanish ('es'); any other value (e.g. 'en', 'fr',
+// 'pt-BR') makes the ticket get translated — see services/translator.js.
+const langQuerySchema = {
+  type: 'object',
+  properties: {
+    lang: { type: 'string', pattern: '^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})?$', default: DEFAULT_LANG }
+  },
+  additionalProperties: false
+}
 
 // Loads the fields needed to (re)send a booking's ticket email: tour
 // name, meeting-point coordinates (used to render the map image — see
@@ -43,6 +55,7 @@ export default async function bookingRoutes(fastify) {
 
   fastify.post('/bookings', {
   schema: {
+    querystring: langQuerySchema,
     body: {
       type: 'object',
       required: ['customerId', 'tourId', 'tourDateId', 'tourScheduleId'],
@@ -64,6 +77,7 @@ export default async function bookingRoutes(fastify) {
       customerId, tourId, tourDateId, tourScheduleId,
       quantity = 1, numberOfChildren = 0, numberOfBabies = 0, numberOfPets = 0
     } = request.body
+    const { lang = DEFAULT_LANG } = request.query
 
     const client = await pg.connect()
     try {
@@ -170,7 +184,7 @@ export default async function bookingRoutes(fastify) {
       let ticketEmail = { delivered: false }
       try {
         const info = await loadBookingEmailDetails(pg, bookingRow.id)
-        ticketEmail = await fastify.sendBookingTicket(info.customer_email, buildTicket(bookingRow, info))
+        ticketEmail = await fastify.sendBookingTicket(info.customer_email, buildTicket(bookingRow, info), lang)
       } catch (err) {
         request.log.error({ err, bookingId: bookingRow.id }, 'Failed to send booking ticket email')
       }
@@ -264,6 +278,7 @@ export default async function bookingRoutes(fastify) {
   // ----------------------------------------------------------------------
   fastify.patch('/bookings/:id', {
     schema: {
+      querystring: langQuerySchema,
       body: {
         type: 'object',
         minProperties: 1,
@@ -279,6 +294,7 @@ export default async function bookingRoutes(fastify) {
     }
   }, async (request, reply) => {
     const { id } = request.params
+    const { lang = DEFAULT_LANG } = request.query
     const client = await pg.connect()
     try {
       await client.query('BEGIN')
@@ -380,7 +396,7 @@ export default async function bookingRoutes(fastify) {
       let ticketEmail = { delivered: false }
       try {
         const info = await loadBookingEmailDetails(pg, updated.id)
-        ticketEmail = await fastify.sendBookingTicket(info.customer_email, buildTicket(updated, info))
+        ticketEmail = await fastify.sendBookingTicket(info.customer_email, buildTicket(updated, info), lang)
       } catch (err) {
         request.log.error({ err, bookingId: updated.id }, 'Failed to send updated booking ticket email')
       }
@@ -400,8 +416,9 @@ export default async function bookingRoutes(fastify) {
   // only (status flip), same as the admin status endpoint below, so
   // booking/review history stays intact.
   // ----------------------------------------------------------------------
-  fastify.delete('/bookings/:id', async (request, reply) => {
+  fastify.delete('/bookings/:id', { schema: { querystring: langQuerySchema } }, async (request, reply) => {
     const { id } = request.params
+    const { lang = DEFAULT_LANG } = request.query
 
     const existing = await pg.query('SELECT * FROM bookings WHERE id = $1', [id])
     if (!existing.rows.length) {
@@ -425,7 +442,7 @@ export default async function bookingRoutes(fastify) {
     let ticketEmail = { delivered: false }
     try {
       const info = await loadBookingEmailDetails(pg, cancelled.id)
-      ticketEmail = await fastify.sendBookingTicket(info.customer_email, buildTicket(cancelled, info))
+      ticketEmail = await fastify.sendBookingTicket(info.customer_email, buildTicket(cancelled, info), lang)
     } catch (err) {
       request.log.error({ err, bookingId: cancelled.id }, 'Failed to send cancellation email')
     }
