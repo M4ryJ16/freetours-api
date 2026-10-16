@@ -12,6 +12,26 @@ function optional(name, fallback = undefined) {
   return process.env[name] ?? fallback
 }
 
+// Parses a comma-separated list of "HH:MM" times (24h), e.g. "08:00,11:00",
+// into [{ hour, minute, label }]. Throws on malformed entries so a typo in
+// .env fails fast at startup instead of silently disabling the job.
+function parseTimes(name, fallback) {
+  const raw = optional(name, fallback)
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(entry)
+      if (!m) {
+        throw new Error(`Invalid time "${entry}" in ${name}. Use 24h HH:MM, comma-separated (e.g. 08:00,11:00).`)
+      }
+      const hour = Number(m[1])
+      const minute = Number(m[2])
+      return { hour, minute, label: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}` }
+    })
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   host: process.env.HOST ?? '0.0.0.0',
@@ -32,6 +52,9 @@ export const config = {
   // a JWT session once a customer record exists.
   jwtSecret: required('JWT_SECRET'),
   jwtExpiresIn: optional('JWT_EXPIRES_IN', '7d'),
+
+  // Brand logo embedded in ticket emails (read from disk at startup).
+  logoPath: optional('LOGO_PATH', './assets/logo.png'),
 
   // SMTP — used to email the customer their tour-registration ticket
   // right after a booking is created. If SMTP_HOST is unset, the mailer
@@ -70,13 +93,16 @@ export const config = {
   // If unset, the mailer skips the QR code and manage link.
   manageBookingUrl: optional('MANAGE_BOOKING_URL'),
 
-  // Daily reservations summary email — sent every midnight (server-side
+  // Daily reservations summary email — sent at SUMMARY_EMAIL_TIMES (server-side
   // cron, see plugins/scheduler.js) with the same "current day + N days
   // ahead" filter as the admin Reservas panel's default view. If
   // SUMMARY_EMAIL is unset, the job is disabled (logged once at startup).
   summaryEmail: optional('SUMMARY_EMAIL'),
   reticketsEmail: optional('RETICKETS_EMAIL'),
-  // IANA timezone the "midnight" trigger and the "today" date are
+  // Times of day (24h HH:MM, comma-separated) at which the summary email
+  // is sent, in SUMMARY_EMAIL_TZ. Example: SUMMARY_EMAIL_TIMES=08:00,11:00
+  summaryEmailTimes: parseTimes('SUMMARY_EMAIL_TIMES', '08:00,11:00'),
+  // IANA timezone the send times and the "today" date are
   // computed in — should match where the tours actually run, not
   // necessarily where the server is hosted.
   summaryEmailTimezone: optional('SUMMARY_EMAIL_TZ', 'Europe/Dublin'),

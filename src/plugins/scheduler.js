@@ -18,18 +18,19 @@ export default fp(async function schedulerPlugin(fastify) {
       .catch((err) => fastify.log.error({ err }, 'Failed to run daily reservations summary job'))
   }
 
-  // Se envía dos veces al día: a las 8:00 y a las 11:00, en la zona
-  // horaria configurada (SUMMARY_EMAIL_TZ).
-  const morningTask = cron.schedule('0 8 * * *', runJob, { timezone: config.summaryEmailTimezone })
-  const midMorningTask = cron.schedule('0 11 * * *', runJob, { timezone: config.summaryEmailTimezone })
+  // Las horas de envío se leen de SUMMARY_EMAIL_TIMES (formato HH:MM,
+  // separadas por comas) en la zona horaria SUMMARY_EMAIL_TZ.
+  const times = config.summaryEmailTimes.map((t) => t.label)
+  const tasks = config.summaryEmailTimes.map(({ hour, minute }) =>
+    cron.schedule(`${minute} ${hour} * * *`, runJob, { timezone: config.summaryEmailTimezone })
+  )
 
   fastify.addHook('onClose', () => {
-    morningTask.stop()
-    midMorningTask.stop()
+    for (const task of tasks) task.stop()
   })
 
   fastify.log.info(
-    { timezone: config.summaryEmailTimezone, to: config.summaryEmail, times: ['08:00', '11:00'] },
-    'Daily reservations summary email job scheduled for 08:00 and 11:00'
+    { timezone: config.summaryEmailTimezone, to: config.summaryEmail, times },
+    `Daily reservations summary email job scheduled for ${times.join(', ')}`
   )
 })
