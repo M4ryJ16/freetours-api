@@ -102,8 +102,9 @@ export default async function bookingRoutes(fastify) {
       }
 
       // Make sure the chosen date and schedule actually belong to this
-      // tour — the FK alone would happily accept a valid tour_dates /
-      // tour_schedules id that belongs to a different tour.
+      // tour and are still active — the FK alone would happily accept a
+      // valid tour_dates / tour_schedules id that belongs to a different
+      // tour, or one that has been deactivated.
       const date = await client.query(
         'SELECT id FROM tour_dates WHERE id = $1 AND tour_id = $2 AND is_active = true',
         [tourDateId, tourId]
@@ -117,14 +118,14 @@ export default async function bookingRoutes(fastify) {
       }
 
       const schedule = await client.query(
-        'SELECT id FROM tour_schedules WHERE id = $1 AND tour_id = $2',
+        'SELECT id FROM tour_schedules WHERE id = $1 AND tour_id = $2 AND is_active = true',
         [tourScheduleId, tourId]
       )
       if (!schedule.rows.length) {
         await client.query('ROLLBACK')
         return reply.code(400).send({
           error: 'Bad Request',
-          message: 'tourScheduleId does not match a schedule for this tour.'
+          message: 'tourScheduleId does not match an available schedule for this tour.'
         })
       }
 
@@ -275,6 +276,11 @@ export default async function bookingRoutes(fastify) {
   // excluding this booking's own currently-held spots so editing
   // quantity down (or keeping the same date/schedule) doesn't get
   // wrongly blocked by itself.
+  //
+  // A date/schedule is only required to be active when the customer is
+  // *moving* to it. A booking that keeps its current date/schedule can
+  // still be edited (e.g. party size) even if that date/schedule has
+  // since been deactivated.
   // ----------------------------------------------------------------------
   fastify.patch('/bookings/:id', {
     schema: {
@@ -327,7 +333,7 @@ export default async function bookingRoutes(fastify) {
         return reply.code(409).send({ error: 'Conflict', message: 'This tour is not currently available.' })
       }
 
-      if (request.body.tourDateId) {
+      if (tourDateId !== booking.tour_date_id) {
         const date = await client.query(
           'SELECT id FROM tour_dates WHERE id = $1 AND tour_id = $2 AND is_active = true',
           [tourDateId, booking.tour_id]
@@ -341,16 +347,16 @@ export default async function bookingRoutes(fastify) {
         }
       }
 
-      if (request.body.tourScheduleId) {
+      if (tourScheduleId !== booking.tour_schedule_id) {
         const schedule = await client.query(
-          'SELECT id FROM tour_schedules WHERE id = $1 AND tour_id = $2',
+          'SELECT id FROM tour_schedules WHERE id = $1 AND tour_id = $2 AND is_active = true',
           [tourScheduleId, booking.tour_id]
         )
         if (!schedule.rows.length) {
           await client.query('ROLLBACK')
           return reply.code(400).send({
             error: 'Bad Request',
-            message: 'tourScheduleId does not match a schedule for this tour.'
+            message: 'tourScheduleId does not match an available schedule for this tour.'
           })
         }
       }

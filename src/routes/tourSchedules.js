@@ -4,6 +4,7 @@
 export default async function tourScheduleRoutes(fastify) {
   const { pg } = fastify
 
+  // Only active schedules are listed (same as GET /:tourId/dates).
   fastify.get('/:tourId/schedules', async (request, reply) => {
     const { tourId } = request.params
 
@@ -13,7 +14,7 @@ export default async function tourScheduleRoutes(fastify) {
     }
 
     const { rows } = await pg.query(
-      'SELECT * FROM tour_schedules WHERE tour_id = $1 ORDER BY time ASC',
+      'SELECT * FROM tour_schedules WHERE tour_id = $1 AND is_active = true ORDER BY time ASC',
       [tourId]
     )
     return rows
@@ -59,13 +60,13 @@ export default async function tourScheduleRoutes(fastify) {
     }
 
     const schedule = await pg.query(
-      'SELECT id FROM tour_schedules WHERE id = $1 AND tour_id = $2',
+      'SELECT id FROM tour_schedules WHERE id = $1 AND tour_id = $2 AND is_active = true',
       [scheduleId, tourId]
     )
     if (!schedule.rows.length) {
       return reply.code(400).send({
         error: 'Bad Request',
-        message: 'scheduleId does not match a schedule for this tour.'
+        message: 'scheduleId does not match an available schedule for this tour.'
       })
     }
 
@@ -126,12 +127,28 @@ export default async function tourScheduleRoutes(fastify) {
       return rows[0]
     } catch (err) {
       if (err.code === '23505') {
+        // The time already exists. If it was previously deactivated,
+        // re-open it instead of reporting a conflict.
+        const { rows } = await pg.query(
+          `UPDATE tour_schedules SET is_active = true
+           WHERE tour_id = $1 AND time = $2 AND is_active = false
+           RETURNING *`,
+          [tourId, time]
+        )
+        if (rows.length) {
+          return rows[0]
+        }
         return reply.code(409).send({ error: 'Conflict', message: 'That departure time already exists.' })
       }
       throw err
     }
   })
 
+  // Hard-deletes the schedule if nothing references it yet. If bookings
+  // already exist for it (FK from bookings.tour_schedule_id blocks the
+  // delete), it's deactivated instead — same soft-archive pattern as
+  // tour_dates — so booking history stays intact and the schedule just
+  // stops showing up as available.
   fastify.delete('/:tourId/schedules/:scheduleId', { preHandler: fastify.requirePublishKey }, async (request, reply) => {
     const { tourId, scheduleId } = request.params
     try {
@@ -145,11 +162,14 @@ export default async function tourScheduleRoutes(fastify) {
       return { message: 'Schedule removed.' }
     } catch (err) {
       if (err.code === '23503') {
-        // FK from bookings.tour_schedule_id — can't delete a schedule that's already booked.
-        return reply.code(409).send({
-          error: 'Conflict',
-          message: 'This schedule has existing bookings and cannot be deleted.'
-        })
+        const { rows } = await pg.query(
+          'UPDATE tour_schedules SET is_active = false WHERE id = $1 AND tour_id = $2 RETURNING *',
+          [scheduleId, tourId]
+        )
+        if (!rows.length) {
+          return reply.code(404).send({ error: 'Not Found', message: 'Schedule not found.' })
+        }
+        return { message: 'This schedule has existing bookings — deactivated instead of deleted.', schedule: rows[0] }
       }
       throw err
     }

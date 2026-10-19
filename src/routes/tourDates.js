@@ -54,6 +54,17 @@ export default async function tourDateRoutes(fastify) {
       return rows[0]
     } catch (err) {
       if (err.code === '23505') {
+        // The date already exists (UNIQUE (tour_id, date)). If it was
+        // previously deactivated, re-open it instead of reporting a conflict.
+        const { rows } = await pg.query(
+          `UPDATE tour_dates SET is_active = true
+           WHERE tour_id = $1 AND date = $2 AND is_active = false
+           RETURNING *`,
+          [tourId, date]
+        )
+        if (rows.length) {
+          return rows[0]
+        }
         return reply.code(409).send({ error: 'Conflict', message: 'That date is already available for this tour.' })
       }
       throw err
