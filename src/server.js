@@ -22,6 +22,7 @@ import reviewRoutes from './routes/reviews.js'
 import authRoutes from './routes/auth.js'
 import i18nRoutes from './routes/i18n.js'
 import schedulerPlugin from './plugins/scheduler.js'
+import tourBookingSettingsRoutes, { bookingSettingsListRoutes } from './routes/bookingSettings.js'
 
 const fastify = Fastify({ logger: true })
 
@@ -60,6 +61,8 @@ await fastify.register(async (app) => {
   await app.register(bookingRoutes)
   await app.register(reviewRoutes)
   await app.register(authRoutes)
+  await app.register(tourBookingSettingsRoutes, { prefix: '/tours' })
+  await app.register(bookingSettingsListRoutes, { prefix: '/booking-settings' })
   await app.register(i18nRoutes)
 })
 
